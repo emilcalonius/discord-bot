@@ -19,6 +19,8 @@ module.exports = {
     let firstMessageInPage
     firstFetch.forEach(element => firstMessageInPage = element.content)
 
+    await interaction.reply("Searching... 🤖")
+
     for(let i = 0; i <= limit; i += 100) {
       const messages = await channel.messages.fetch({
         limit: limit < 100 ? limit : 100,
@@ -43,8 +45,6 @@ module.exports = {
         }
       });
     }
-
-    await interaction.reply("Gif spams:")
 
     let temp = []
     let len = 15

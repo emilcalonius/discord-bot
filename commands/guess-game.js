@@ -136,6 +136,7 @@ module.exports = {
               `\n\nThe correct answer was ${randomMsg.author}`
           }
         )
+        collector.stop()
       } else {
         interaction.reply({ content: "Try again!", ephemeral: true })
       }

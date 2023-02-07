@@ -1,16 +1,18 @@
-const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, Events } = require('discord.js');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("guess-game")
     .setDescription("Guess the sender of the randomly selected message"),
-  async execute(interaction) {
+  async execute(interaction, toggleQuiz) {
     const startEmbed = new EmbedBuilder()
       .setColor("#c27546")
       .setTitle("Random message guessing game")
       .setDescription("Guessing game started!\n\nSelect text channel:")
 
     const guild = interaction.guild
+
+    let collector = interaction.channel.createMessageComponentCollector()
 
     let channels = await guild.channels.fetch()
     const channelsArr = []
@@ -32,100 +34,16 @@ module.exports = {
       i++
     }
 
-    // Create action rows that are sent for selecting text channel
-    const channelButtons = channelChunks.map(chunk => {
-      if(chunk.length === 1)
-        return new ActionRowBuilder()
-          .addComponents(
-            new ButtonBuilder()
-              .setCustomId(chunk[0].id)
-              .setLabel(chunk[0].name)
-              .setStyle(ButtonStyle.Primary),
-          )
-      if(chunk.length === 2)
-        return new ActionRowBuilder()
-          .addComponents(
-            new ButtonBuilder()
-              .setCustomId(chunk[0].id)
-              .setLabel(chunk[0].name)
-              .setStyle(ButtonStyle.Primary),
-            new ButtonBuilder()
-              .setCustomId(chunk[1].id)
-              .setLabel(chunk[1].name)
-              .setStyle(ButtonStyle.Primary),
-          )
-      if(chunk.length === 3)
-        return new ActionRowBuilder()
-          .addComponents(
-            new ButtonBuilder()
-              .setCustomId(chunk[0].id)
-              .setLabel(chunk[0].name)
-              .setStyle(ButtonStyle.Primary),
-            new ButtonBuilder()
-              .setCustomId(chunk[1].id)
-              .setLabel(chunk[1].name)
-              .setStyle(ButtonStyle.Primary),
-            new ButtonBuilder()
-              .setCustomId(chunk[2].id)
-              .setLabel(chunk[2].name)
-              .setStyle(ButtonStyle.Primary),
-          )
-      if(chunk.length === 4)
-        return new ActionRowBuilder()
-          .addComponents(
-            new ButtonBuilder()
-              .setCustomId(chunk[0].id)
-              .setLabel(chunk[0].name)
-              .setStyle(ButtonStyle.Primary),
-            new ButtonBuilder()
-              .setCustomId(chunk[1].id)
-              .setLabel(chunk[1].name)
-              .setStyle(ButtonStyle.Primary),
-            new ButtonBuilder()
-              .setCustomId(chunk[2].id)
-              .setLabel(chunk[2].name)
-              .setStyle(ButtonStyle.Primary),
-            new ButtonBuilder()
-              .setCustomId(chunk[3].id)
-              .setLabel(chunk[3].name)
-              .setStyle(ButtonStyle.Primary),
-          )
-      if(chunk.length === 5)
-        return new ActionRowBuilder()
-          .addComponents(
-            new ButtonBuilder()
-              .setCustomId(chunk[0].id)
-              .setLabel(chunk[0].name)
-              .setStyle(ButtonStyle.Primary),
-            new ButtonBuilder()
-              .setCustomId(chunk[1].id)
-              .setLabel(chunk[1].name)
-              .setStyle(ButtonStyle.Primary),
-            new ButtonBuilder()
-              .setCustomId(chunk[2].id)
-              .setLabel(chunk[2].name)
-              .setStyle(ButtonStyle.Primary),
-            new ButtonBuilder()
-              .setCustomId(chunk[3].id)
-              .setLabel(chunk[3].name)
-              .setStyle(ButtonStyle.Primary),
-            new ButtonBuilder()
-              .setCustomId(chunk[4].id)
-              .setLabel(chunk[4].name)
-              .setStyle(ButtonStyle.Primary),
-          )
-    })
+    const channelButtons = getChannelChoices(channelChunks)
         
     await interaction.reply({ embeds: [startEmbed] })
     await interaction.channel.send({ components: channelButtons })
 
-    const channelCollector = interaction.channel.createMessageComponentCollector()
-
     let round = 1;
 
-    channelCollector.on("collect", async btnInteraction => {
+    collector.on("collect", async btnInteraction => {
       if(!btnInteraction.isButton()) return
-      channelCollector.stop()
+      collector.stop()
       const channelId = btnInteraction.customId
       const channel = await guild.channels.fetch(channelId)
 
@@ -135,12 +53,21 @@ module.exports = {
 
       await btnInteraction.reply({ embeds: [infoEmbed] })
 
-      playRound(interaction, channel, round)
+      playRound(interaction, channel, round, collector, toggleQuiz)
     })
   }
 }
 
-async function playRound(interaction, channel, round) {
+/**
+ * Play a round of the guessing game
+ * 
+ * @param {*} interaction 
+ * @param {*} channel 
+ * @param {*} round 
+ * @param {*} collector
+ * @returns void
+ */
+async function playRound(interaction, channel, round, collector, toggleQuiz) {
   const messages = await channel.messages.fetch({ limit: 100 })
   const authors = []
 
@@ -171,8 +98,100 @@ async function playRound(interaction, channel, round) {
     authorChunks.push(authors.splice(0, 5))
   }
 
-  // Create action rows that are sent as quiz choices
-  const rows = authorChunks.map(chunk => {
+  const rows = getAuthorChoices(authorChunks)
+
+  const roundEmbed = new EmbedBuilder()
+    .setColor("#c27546")
+    .setTitle(`Round ${round}`)
+    .setDescription("Select a user to guess who sent the following message:")
+
+  const randomMsg = messagesArr[Math.floor(Math.random() * messagesArr.length)]
+
+  await interaction.channel.send({ embeds: [roundEmbed] })
+  await interaction.channel.send({ content: `${randomMsg.content}`, components: rows })
+
+  collector = interaction.channel.createMessageComponentCollector()
+
+  collector.on("collect", async btnInteraction => {
+    if(!btnInteraction.isButton()) return
+    if(btnInteraction.customId === randomMsg.author) {
+      collector.stop()
+      announceWinner(btnInteraction.user.username, randomMsg.author, btnInteraction, interaction, channel, round, collector, toggleQuiz)
+    } else {
+      await btnInteraction.reply({ content: "Try again!", ephemeral: true })
+    }
+  })
+}
+
+/**
+ * Announce the winner of the round and ask if user wants to end game or start next round
+ * 
+ * @param {*} winner 
+ * @param {*} answer 
+ * @param {*} btnInteraction 
+ * @param {*} interaction 
+ * @param {*} channel 
+ * @param {*} round 
+ * @param {*} collector
+ */
+async function announceWinner(winner, answer, btnInteraction, interaction, channel, round, collector, toggleQuiz) {
+  const endEmbed = new EmbedBuilder()
+    .setColor("#7f9c77")
+    .setDescription(`Winner is ${winner}! 🥇`+
+    `\n\nThe correct answer was ${answer}` )
+
+  await btnInteraction.reply({ embeds: [endEmbed] })
+
+  const endButtons = new ActionRowBuilder()
+    .addComponents(
+      new ButtonBuilder()
+        .setCustomId("end")
+        .setLabel("End game")
+        .setStyle(ButtonStyle.Danger),
+      new ButtonBuilder()
+          .setCustomId("continue")
+          .setLabel("Next round")
+          .setStyle(ButtonStyle.Success),
+    )
+
+  await interaction.channel.send({ components: [endButtons] })
+
+  collector = interaction.channel.createMessageComponentCollector()
+
+  collector.on("collect", async btnInteraction => {
+    if(!btnInteraction.isButton()) return
+
+    if(btnInteraction.customId === "end") {
+      collector.stop()
+      const gameOverEmbed = new EmbedBuilder()
+        .setColor("#0052cc")
+        .setDescription(`Game over`)
+
+      await btnInteraction.reply({ embeds: [gameOverEmbed] })
+      toggleQuiz()
+    }
+    
+    if(btnInteraction.customId === "continue") {
+      collector.stop()
+      const newRoundEmbed = new EmbedBuilder()
+        .setColor("#0052cc")
+        .setDescription(`Starting new round`)
+      await btnInteraction.reply({ embeds: [newRoundEmbed] })
+      round += 1
+      playRound(interaction, channel, round)
+    }
+  })
+}
+
+/**
+ * Create action rows that are sent as quiz choices
+ * 
+ * @param {*} authorChunks authors divided into chunks of five authors 
+ * because of limited amount of buttons that can be added to a message
+ * @returns action row containing the buttons with message authors
+ */
+function getAuthorChoices(authorChunks) {
+  return authorChunks.map(chunk => {
     if(chunk.length === 1)
       return new ActionRowBuilder()
         .addComponents(
@@ -254,74 +273,96 @@ async function playRound(interaction, channel, round) {
             .setStyle(ButtonStyle.Primary),
         )
   })
-
-  const roundEmbed = new EmbedBuilder()
-    .setColor("#c27546")
-    .setTitle(`Round ${round}`)
-    .setDescription("Select a user to guess who sent the following message:")
-
-  const randomMsg = messagesArr[Math.floor(Math.random() * messagesArr.length)]
-
-  await interaction.channel.send({ embeds: [roundEmbed] })
-  await interaction.channel.send({ content: `${randomMsg.content}`, components: rows })
-
-  const answerCollector = interaction.channel.createMessageComponentCollector()
-
-  answerCollector.on("collect", async btnInteraction => {
-    if(!btnInteraction.isButton()) return
-    if(btnInteraction.customId === randomMsg.author) {
-      answerCollector.stop()
-      announceWinner(btnInteraction.user.username, randomMsg.author, btnInteraction, interaction, channel, round)
-    } else {
-      await btnInteraction.reply({ content: "Try again!", ephemeral: true })
-    }
-  })
 }
 
-async function announceWinner(winner, answer, btnInteraction, interaction, channel, round) {
-  const endEmbed = new EmbedBuilder()
-    .setColor("#7f9c77")
-    .setDescription(`Winner is ${winner}! 🥇`+
-    `\n\nThe correct answer was ${answer}` )
-
-  await btnInteraction.reply({ embeds: [endEmbed] })
-
-  const endButtons = new ActionRowBuilder()
-    .addComponents(
-      new ButtonBuilder()
-        .setCustomId("end")
-        .setLabel("End game")
-        .setStyle(ButtonStyle.Danger),
-      new ButtonBuilder()
-          .setCustomId("continue")
-          .setLabel("Next round")
-          .setStyle(ButtonStyle.Success),
-    )
-
-  await interaction.channel.send({ components: [endButtons] })
-
-  const endCollector = interaction.channel.createMessageComponentCollector()
-
-  endCollector.on("collect", async btnInteraction => {
-    if(!btnInteraction.isButton()) return
-
-    if(btnInteraction.customId === "end") {
-      endCollector.stop()
-      const gameOverEmbed = new EmbedBuilder()
-        .setColor("#0052cc")
-        .setDescription(`Game over`)
-
-      await btnInteraction.reply({ embeds: [gameOverEmbed] })
-    }
-    
-    if(btnInteraction.customId === "continue") {
-      endCollector.stop()
-      const newRoundEmbed = new EmbedBuilder()
-        .setColor("#0052cc")
-        .setDescription(`Starting new round`)
-      await btnInteraction.reply({ embeds: [newRoundEmbed] })
-      round += 1
-      playRound(interaction, channel, round)
-    }
+/**
+ * Create action rows that are sent as choices when selecting text channel where message is selected from
+ * 
+ * @param {*} channelChunks authors divided into chunks of five authors 
+ * because of limited amount of buttons that can be added to a message
+ * @returns action row containing the buttons with channels
+ */
+function getChannelChoices(channelChunks) {
+  return channelChunks.map(chunk => {
+    if(chunk.length === 1)
+      return new ActionRowBuilder()
+        .addComponents(
+          new ButtonBuilder()
+            .setCustomId(chunk[0].id)
+            .setLabel(chunk[0].name)
+            .setStyle(ButtonStyle.Primary),
+        )
+    if(chunk.length === 2)
+      return new ActionRowBuilder()
+        .addComponents(
+          new ButtonBuilder()
+            .setCustomId(chunk[0].id)
+            .setLabel(chunk[0].name)
+            .setStyle(ButtonStyle.Primary),
+          new ButtonBuilder()
+            .setCustomId(chunk[1].id)
+            .setLabel(chunk[1].name)
+            .setStyle(ButtonStyle.Primary),
+        )
+    if(chunk.length === 3)
+      return new ActionRowBuilder()
+        .addComponents(
+          new ButtonBuilder()
+            .setCustomId(chunk[0].id)
+            .setLabel(chunk[0].name)
+            .setStyle(ButtonStyle.Primary),
+          new ButtonBuilder()
+            .setCustomId(chunk[1].id)
+            .setLabel(chunk[1].name)
+            .setStyle(ButtonStyle.Primary),
+          new ButtonBuilder()
+            .setCustomId(chunk[2].id)
+            .setLabel(chunk[2].name)
+            .setStyle(ButtonStyle.Primary),
+        )
+    if(chunk.length === 4)
+      return new ActionRowBuilder()
+        .addComponents(
+          new ButtonBuilder()
+            .setCustomId(chunk[0].id)
+            .setLabel(chunk[0].name)
+            .setStyle(ButtonStyle.Primary),
+          new ButtonBuilder()
+            .setCustomId(chunk[1].id)
+            .setLabel(chunk[1].name)
+            .setStyle(ButtonStyle.Primary),
+          new ButtonBuilder()
+            .setCustomId(chunk[2].id)
+            .setLabel(chunk[2].name)
+            .setStyle(ButtonStyle.Primary),
+          new ButtonBuilder()
+            .setCustomId(chunk[3].id)
+            .setLabel(chunk[3].name)
+            .setStyle(ButtonStyle.Primary),
+        )
+    if(chunk.length === 5)
+      return new ActionRowBuilder()
+        .addComponents(
+          new ButtonBuilder()
+            .setCustomId(chunk[0].id)
+            .setLabel(chunk[0].name)
+            .setStyle(ButtonStyle.Primary),
+          new ButtonBuilder()
+            .setCustomId(chunk[1].id)
+            .setLabel(chunk[1].name)
+            .setStyle(ButtonStyle.Primary),
+          new ButtonBuilder()
+            .setCustomId(chunk[2].id)
+            .setLabel(chunk[2].name)
+            .setStyle(ButtonStyle.Primary),
+          new ButtonBuilder()
+            .setCustomId(chunk[3].id)
+            .setLabel(chunk[3].name)
+            .setStyle(ButtonStyle.Primary),
+          new ButtonBuilder()
+            .setCustomId(chunk[4].id)
+            .setLabel(chunk[4].name)
+            .setStyle(ButtonStyle.Primary),
+        )
   })
 }

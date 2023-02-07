@@ -3,11 +3,18 @@ require("dotenv").config()
 const fs = require('node:fs');
 const path = require('node:path');
 
+let isQuizRunning = false
+
+function toggleQuiz() {
+	isQuizRunning = !isQuizRunning
+}
+
 const client = new Client({
   intents: [
 		GatewayIntentBits.Guilds, 
 		GatewayIntentBits.MessageContent, 
-		GatewayIntentBits.GuildVoiceStates
+		GatewayIntentBits.GuildVoiceStates,
+		GatewayIntentBits.GuildMessages
 	]
 })
 
@@ -29,6 +36,14 @@ for (const file of commandFiles) {
 
 client.on(Events.InteractionCreate, async interaction => {
 	if (!interaction.isChatInputCommand()) return;
+	if (interaction.commandName === "guess-game" && isQuizRunning) {
+		interaction.reply({ content: "Guessing game is already runnning. End the running game before starting a new game!", ephemeral: true })
+		return
+	}
+
+	if (interaction.commandName === "guess-game" && !isQuizRunning) {
+		toggleQuiz()
+	}
 
 	const command = interaction.client.commands.get(interaction.commandName);
 
@@ -38,7 +53,11 @@ client.on(Events.InteractionCreate, async interaction => {
 	}
 
 	try {
-		await command.execute(interaction);
+		if (interaction.commandName === "guess-game") {
+			await command.execute(interaction, toggleQuiz);
+		} else {
+			await command.execute(interaction);
+		}
 	} catch (error) {
 		console.error(error);
 		await interaction.reply({ content: 'There was an error while executing this command!', ephemeral: true });

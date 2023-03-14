@@ -6,14 +6,14 @@ const ytdl = require("ytdl-core")
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("sound")
-    .setDescription("bruh")
+    .setDescription("Soundboard")
     .addStringOption(option =>
 			option
 				.setName("sound")
 				.setDescription("Choose an audio")
         .setRequired(true)
         .addChoices(
-          { name: "bruh", value: "https://www.youtube.com/watch?v=kpwNjdEPz7E" },
+          { name: "bruh", value: "https://www.youtube.com/watch?v=D2_r4q2imnQ" },
           { name: "evil-laugh", value: "https://www.youtube.com/watch?v=9xIlNsSd5gk" },
           { name: "bing-chilling", value: "https://www.youtube.com/watch?v=KH_XIt-hm2Y" },
           { name: "AUGHHHH", value: "https://www.youtube.com/watch?v=sVxo39hXIFs" },
@@ -23,7 +23,8 @@ module.exports = {
           { name: "fart", value: "https://www.youtube.com/watch?v=9FLRHejWAo8" },
           { name: "nerf-this", value: "https://www.youtube.com/watch?v=XcKS1R0o-20" },
           { name: "amongus", value: "https://www.youtube.com/watch?v=ekL881PJMjI"},
-          { name: "amongus-likovi-stigli", value: "https://www.youtube.com/watch?v=h20yCydlUyg" }
+          { name: "amongus-likovi-stigli", value: "https://www.youtube.com/watch?v=h20yCydlUyg" },
+          { name: "goofy", value: "https://www.youtube.com/watch?v=H64wI6-tDwk"}
       ))
     .addStringOption(option =>
 			option

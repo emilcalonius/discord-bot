@@ -35,5 +35,9 @@
       </ul>
     </ul>
   </li>
+  <li>
+    <b>/guess-game:</b>
+    Start a message guessing game<br>
+  </li>
 <ul>
   

@@ -1,8 +1,9 @@
 # 🤖 S.P.I.C.E Discord bot 🤖
 
-<img width="500px" src="./assets/spice-bot-avatar.png"/>
+<img width="500px" src="./assets/spice-bot-avatar.jpeg"/>
 
 ## 📢 Commands
+
 <ul>
   <li>
     <b>/gif:</b>
@@ -40,4 +41,3 @@
     Start a message guessing game<br>
   </li>
 <ul>
-  
